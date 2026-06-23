@@ -139,6 +139,37 @@ app.post('/create-pro-subscription', async (req, res) => {
   }
 });
 
+// Obtener saldo disponible en Stripe
+app.get('/balance', async (req, res) => {
+  try {
+    const balance = await stripe.balance.retrieve();
+    const available = balance.available.find(b => b.currency === 'eur')?.amount ?? 0;
+    const pending = balance.pending.find(b => b.currency === 'eur')?.amount ?? 0;
+    res.json({ available: available / 100, pending: pending / 100 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Solicitar transferencia a cuenta bancaria
+app.post('/payout', async (req, res) => {
+  try {
+    const balance = await stripe.balance.retrieve();
+    const available = balance.available.find(b => b.currency === 'eur')?.amount ?? 0;
+    if (available <= 0) {
+      return res.status(400).json({ error: 'No hay saldo disponible para retirar.' });
+    }
+    const payout = await stripe.payouts.create({
+      amount: available,
+      currency: 'eur',
+      description: 'Retirada DroneMarket',
+    });
+    res.json({ success: true, amount: available / 100, arrival: payout.arrival_date });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Cancelar suscripción Pro
 app.post('/cancel-pro-subscription', async (req, res) => {
   try {
