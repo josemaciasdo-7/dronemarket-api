@@ -25,7 +25,7 @@ app.post('/create-checkout-session', async (req, res) => {
           currency: 'eur',
           product_data: {
             name: listingTitle,
-            description: 'Compra segura a través de DroneMarket',
+            description: 'Compra segura · Pago retenido hasta confirmar recepción',
           },
           unit_amount: amountCents,
         },
@@ -35,15 +35,13 @@ app.post('/create-checkout-session', async (req, res) => {
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: { listing_id: listingId },
+      // AUTORIZACIÓN DIFERIDA: el dinero se retiene en la tarjeta del comprador
+      // pero NO se cobra hasta que confirme la recepción del producto
+      payment_intent_data: {
+        capture_method: 'manual',
+        metadata: { listing_id: listingId },
+      },
     };
-
-    // Si el vendedor tiene cuenta Stripe Connect, transferir automáticamente
-    if (sellerStripeAccountId) {
-      sessionParams.payment_intent_data = {
-        application_fee_amount: platformFee,
-        transfer_data: { destination: sellerStripeAccountId },
-      };
-    }
 
     const session = await stripe.checkout.sessions.create(sessionParams);
     res.json({ url: session.url });
@@ -134,6 +132,32 @@ app.post('/create-pro-subscription', async (req, res) => {
     });
 
     res.json({ url: session.url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Capturar pago retenido cuando comprador confirma recepción
+app.post('/capture-payment', async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) return res.status(400).json({ error: 'paymentIntentId requerido' });
+
+    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
+    res.json({ success: true, status: paymentIntent.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cancelar retención (si el comprador cancela antes de confirmar)
+app.post('/cancel-payment', async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) return res.status(400).json({ error: 'paymentIntentId requerido' });
+
+    const paymentIntent = await stripe.paymentIntents.cancel(paymentIntentId);
+    res.json({ success: true, status: paymentIntent.status });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
