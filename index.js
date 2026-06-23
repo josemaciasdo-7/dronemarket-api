@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const COMMISSION_RATE = 0.05;
+const COMMISSION_RATE = 0.02;
 
 app.get('/', (req, res) => res.json({ status: 'DroneMarket API funcionando' }));
 
