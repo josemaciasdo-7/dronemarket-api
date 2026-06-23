@@ -96,5 +96,62 @@ app.get('/connect-account-status/:accountId', async (req, res) => {
   }
 });
 
+// Crear suscripción DroneMarket Pro
+app.post('/create-pro-subscription', async (req, res) => {
+  try {
+    const { userId, email, successUrl, cancelUrl, isFirstMonth } = req.body;
+
+    // Crear o recuperar cliente de Stripe
+    let customer;
+    const existing = await stripe.customers.list({ email, limit: 1 });
+    if (existing.data.length > 0) {
+      customer = existing.data[0];
+    } else {
+      customer = await stripe.customers.create({ email, metadata: { user_id: userId } });
+    }
+
+    // Precio: 4,99€ primer mes, luego 9,99€/mes
+    const session = await stripe.checkout.sessions.create({
+      customer: customer.id,
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          product_data: {
+            name: 'DroneMarket Pro',
+            description: 'Envíos gratis · Prioridad en búsqueda · Impulso de negocio',
+          },
+          unit_amount: isFirstMonth ? 499 : 999,
+          recurring: { interval: 'month' },
+        },
+        quantity: 1,
+      }],
+      discounts: isFirstMonth ? [] : [],
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: { user_id: userId, plan: 'pro' },
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cancelar suscripción Pro
+app.post('/cancel-pro-subscription', async (req, res) => {
+  try {
+    const { stripeCustomerId } = req.body;
+    const subscriptions = await stripe.subscriptions.list({ customer: stripeCustomerId, limit: 1 });
+    if (subscriptions.data.length > 0) {
+      await stripe.subscriptions.cancel(subscriptions.data[0].id);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`API corriendo en puerto ${PORT}`));
