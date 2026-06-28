@@ -49,7 +49,7 @@ app.post('/create-checkout-session', async (req, res) => {
     };
 
     const session = await stripe.checkout.sessions.create(sessionParams);
-    res.json({ url: session.url });
+    res.json({ url: session.url, sessionId: session.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -137,6 +137,16 @@ app.post('/create-pro-subscription', async (req, res) => {
     });
 
     res.json({ url: session.url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener payment intent de una sesión de checkout
+app.get('/checkout-session/:id', async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.retrieve(req.params.id);
+    res.json({ paymentIntentId: session.payment_intent, metadata: session.metadata });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
