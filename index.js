@@ -13,7 +13,7 @@ app.get('/', (req, res) => res.json({ status: 'DroneMarket API funcionando' }));
 // Crear sesión de pago
 app.post('/create-checkout-session', async (req, res) => {
   try {
-    const { listingId, listingTitle, price, sellerStripeAccountId, successUrl, cancelUrl } = req.body;
+    const { listingId, listingTitle, price, sellerStripeAccountId, successUrl, cancelUrl, shippingAddress } = req.body;
 
     const amountCents = Math.round(price * 100);
     const platformFee = Math.round(amountCents * COMMISSION_RATE);
@@ -35,11 +35,16 @@ app.post('/create-checkout-session', async (req, res) => {
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: { listing_id: listingId },
-      // AUTORIZACIÓN DIFERIDA: el dinero se retiene en la tarjeta del comprador
-      // pero NO se cobra hasta que confirme la recepción del producto
       payment_intent_data: {
         capture_method: 'manual',
-        metadata: { listing_id: listingId },
+        metadata: {
+          listing_id: listingId,
+          shipping_name: shippingAddress?.name ?? '',
+          shipping_street: shippingAddress?.street ?? '',
+          shipping_city: shippingAddress?.city ?? '',
+          shipping_zip: shippingAddress?.zip ?? '',
+          shipping_phone: shippingAddress?.phone ?? '',
+        },
       },
     };
 
@@ -132,6 +137,16 @@ app.post('/create-pro-subscription', async (req, res) => {
     });
 
     res.json({ url: session.url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener metadatos de un payment intent
+app.get('/payment-intent/:id', async (req, res) => {
+  try {
+    const pi = await stripe.paymentIntents.retrieve(req.params.id);
+    res.json({ metadata: pi.metadata });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
